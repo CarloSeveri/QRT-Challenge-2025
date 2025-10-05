@@ -39,9 +39,6 @@ $$
 
 We also created interaction features among high-risk mutations to capture potential synergistic effects, such as:
 
-$$
-TP53\_RUNX1 = TP53\_MUT \times RUNX1\_MUT, \quad TP53\_ASXL1 = TP53\_MUT \times ASXL1\_MUT, \quad RUNX1\_ASXL1 = RUNX1\_MUT \times ASXL1\_MUT
-$$
 
 Cytogenetic abnormalities were incorporated via indicator variables for key lesions, including $$-7$$, $$+8$$, $$del5q$$, $$t(8;21)$$, and $$inv(16)$$. We also computed a composite cytogenetic score:
 
