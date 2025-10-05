@@ -87,7 +87,7 @@ $$
 where $$\delta_i$$ is the event indicator, $$R_i$$ the risk set, $$\lambda$$ the regularization parameter, and $$\alpha$$ the L1/L2 mixing ratio. The L1 penalty encourages sparsity, facilitating feature selection, while the L2 penalty stabilizes coefficient estimates. Hyperparameters were optimized via 3-fold cross-validation using the concordance index as the scoring metric:
 
 $$
-C\text{-index} = \frac{\text{# concordant pairs}}{\text{# comparable pairs}}
+C\text{-index} = \frac{\text{# concordant pairs}}{\text{number of comparable pairs}}
 $$
 
 2. **Random Survival Forests (RSF):**  
