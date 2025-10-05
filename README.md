@@ -1,16 +1,20 @@
 ### Methodology and Findings
 
-In this study, we aimed to predict patient survival outcomes by integrating clinical and molecular data through a combination of feature engineering, preprocessing, and advanced survival modeling techniques. Our methodology consisted of several stages: data preprocessing, feature transformation, correlation filtering, and model training using both penalized Cox regression (Coxnet) and Random Survival Forests (RSF).
+Our study aimed to predict patient survival outcomes by integrating clinical and molecular data, leveraging advanced feature engineering, rigorous preprocessing, and robust survival modeling techniques. The pipeline combined domain knowledge with machine learning to capture both linear and non-linear patterns in the data. 
 
 #### Feature Engineering and Preprocessing
 
-We began by preprocessing the clinical dataset to create meaningful derived variables. For key biochemical features such as $$BM\_BLAST$$ (bone marrow blasts percentage), $$HB$$ (hemoglobin), $$PLT$$ (platelets), $$WBC$$ (white blood cell count), $$ANC$$ (absolute neutrophil count), and $$MONOCYTES$$, we generated polynomial features of degree 3 (interaction-only, without bias) to capture non-linear relationships between these biomarkers and survival. Additionally, we created logarithmic, square root, and squared transformations to normalize skewed distributions and highlight potential non-linear effects:
+We began with a comprehensive feature engineering phase, focusing on both clinical and molecular predictors. For clinical biochemical features, we considered key blood markers including $$BM\_BLAST$$ (bone marrow blast percentage), $$HB$$ (hemoglobin), $$PLT$$ (platelet count), $$WBC$$ (white blood cell count), $$ANC$$ (absolute neutrophil count), and $$MONOCYTES$$. These markers are directly related to hematopoietic function and disease burden in patients. To capture non-linear effects and interactions between these features, we created polynomial transformations of degree 3, considering only interaction terms. This allows the model to account for synergistic relationships between multiple biomarkers without introducing unnecessary complexity from higher-degree monomials.  
+
+In addition to polynomial interactions, we applied logarithmic, square root, and squared transformations to the raw values of biochemical features:
 
 $$
 x_{log} = \log(1 + x), \quad x_{sqrt} = \sqrt{x}, \quad x_{square} = x^2
 $$
 
-We also derived biologically relevant ratios that capture interactions between cell populations, such as:
+The logarithmic transformation mitigates the influence of extreme outliers and skewed distributions, while square and square-root transformations help capture potential curvature in the relationships between biomarkers and survival outcomes.
+
+We further derived biologically meaningful ratios between cell types to capture systemic relationships and relative proportions in hematopoiesis:
 
 $$
 WBC\_to\_HB = \frac{WBC}{HB + \epsilon}, \quad PLT\_to\_ANC = \frac{PLT}{ANC + \epsilon}, \quad BLAST\_to\_WBC = \frac{BM\_BLAST}{WBC + \epsilon}
@@ -20,49 +24,59 @@ $$
 ANC\_to\_MONOCYTES = \frac{ANC}{MONOCYTES + \epsilon}, \quad PLT\_to\_HB = \frac{PLT}{HB + \epsilon}, \quad BLAST\_to\_ANC = \frac{BM\_BLAST}{ANC + \epsilon}, \quad BLAST\_to\_PLT = \frac{BM\_BLAST}{PLT + \epsilon}, \quad MONO\_to\_WBC = \frac{MONOCYTES}{WBC + \epsilon}
 $$
 
-where $$\epsilon = 1e-5$$ prevents division by zero. These ratios were then log-transformed to reduce skewness and improve model stability.
+Here, $$\epsilon = 1e-5$$ prevents division by zero. These ratios provide insights into the relative burden of different blood cell populations, reflecting both disease progression and patient physiology. We then applied log-transformations to all ratio features to normalize their distributions and reduce heteroscedasticity.
 
-From the molecular perspective, we incorporated mutation data from high-risk genes (e.g., $$TP53, RUNX1, ASXL1$$) and epigenetic regulators ($$ASXL1, TET2, DNMT3A$$). For each patient, we calculated:
+On the molecular side, we focused on mutations in high-risk genes such as $$TP53, RUNX1,$$ and $$ASXL1$$, which are known to strongly influence prognosis. We encoded the presence of mutations as binary variables, and also calculated aggregate features, such as:
 
-1. **Mutation counts:** presence of mutations per gene.
-2. **High-risk mutations:** a binary feature indicating whether any high-risk mutation was present:
+1. **High-risk mutation indicator:**
 
 $$
 HIGH\_RISK\_MUT = \max(TP53\_MUT, RUNX1\_MUT, ASXL1\_MUT)
 $$
 
-3. **Epigenetic mutation load:** sum of mutations in key epigenetic regulators:
+This captures whether a patient carries any of the mutations known to significantly impact survival.
+
+2. **Epigenetic mutation load:** 
 
 $$
 EPIGENETIC\_MUT = ASXL1\_MUT + TET2\_MUT + DNMT3A\_MUT
 $$
 
-We also created interaction features among high-risk mutations to capture potential synergistic effects, such as:
+Mutations in these genes reflect clonal hematopoiesis and epigenetic dysregulation, which are associated with disease progression.  
 
+3. **Interaction terms among high-risk genes:**  
 
-Cytogenetic abnormalities were incorporated via indicator variables for key lesions, including $$-7$$, $$+8$$, $$del5q$$, $$t(8;21)$$, and $$inv(16)$$. We also computed a composite cytogenetic score:
+$$
+TP53\_RUNX1 = TP53\_MUT \times RUNX1\_MUT, \quad TP53\_ASXL1 = TP53\_MUT \times ASXL1\_MUT, \quad RUNX1\_ASXL1 = RUNX1\_MUT \times ASXL1\_MUT
+$$
+
+These interactions capture potential synergistic effects between mutations that may exacerbate disease severity.
+
+Cytogenetic abnormalities were also included, as they provide crucial prognostic information. We encoded presence of specific chromosomal aberrations, such as $$-7$$, $$+8$$, $$del5q$$, $$t(8;21)$$, and $$inv(16)$$, and created a composite cytogenetic score:
 
 $$
 CYTO\_SCORE = MONOSOMY\_7 + TRISOMY\_8 + COMPLEX\_KARYO
 $$
 
-to summarize overall chromosomal risk.
+where $$COMPLEX\_KARYO$$ indicates three or more abnormalities. This score captures the overall chromosomal instability of each patient, which is strongly predictive of poor outcomes.
 
-Finally, we included variant allele frequency (VAF) statistics (max, mean, sum) per patient to quantify the burden of mutations and their clonal prevalence. Log transformations were applied to reduce skewness:
+Finally, we incorporated variant allele frequency (VAF) data to quantify the clonal prevalence of mutations:
 
 $$
 VAF\_MAX\_log = \log(1 + VAF\_MAX), \quad VAF\_MEAN\_log = \log(1 + VAF\_MEAN), \quad VAF\_SUM\_log = \log(1 + VAF\_SUM)
 $$
 
+VAF statistics provide information about the size of the clone carrying the mutation, offering additional prognostic power beyond binary mutation presence.
+
 #### Correlation Filtering
 
-To reduce multicollinearity and improve model stability, we computed the absolute correlation matrix and removed one feature from each highly correlated pair (|corr| > 0.9). This step preserved interpretability and ensured that features contributing redundant information were eliminated, reducing noise in the penalized regression model.
+To prevent multicollinearity and enhance model stability, we computed the absolute correlation matrix among all features and removed one feature from each highly correlated pair (|corr| > 0.9). This step ensures that redundant information does not inflate the variance of model coefficients or bias feature importance estimates.
 
-#### Modeling
+#### Modeling Rationale
 
-For survival prediction, we employed two complementary methods:
+We applied two complementary survival modeling approaches:
 
-1. **Coxnet (penalized Cox proportional hazards model):**  
+1. **Coxnet (penalized Cox regression):**  
 
 The Coxnet model maximizes the penalized partial likelihood:
 
@@ -70,7 +84,7 @@ $$
 \mathcal{L}(\beta) = \sum_{i=1}^n \delta_i \left( x_i^\top \beta - \log \sum_{j \in R_i} e^{x_j^\top \beta} \right) - \lambda \left( \alpha \|\beta\|_1 + \frac{1-\alpha}{2} \|\beta\|_2^2 \right)
 $$
 
-where $$\delta_i$$ is the event indicator, $$R_i$$ the risk set, $$\lambda$$ the penalty strength, and $$\alpha$$ the L1/L2 mixing ratio. Hyperparameters were optimized via 3-fold cross-validation, using the **concordance index** as the scoring metric:
+where $$\delta_i$$ is the event indicator, $$R_i$$ the risk set, $$\lambda$$ the regularization parameter, and $$\alpha$$ the L1/L2 mixing ratio. The L1 penalty encourages sparsity, facilitating feature selection, while the L2 penalty stabilizes coefficient estimates. Hyperparameters were optimized via 3-fold cross-validation using the concordance index as the scoring metric:
 
 $$
 C\text{-index} = \frac{\text{# concordant pairs}}{\text{# comparable pairs}}
@@ -78,8 +92,8 @@ $$
 
 2. **Random Survival Forests (RSF):**  
 
-RSF, a non-parametric ensemble method, constructs multiple survival trees using bootstrapped samples and aggregates predictions to estimate cumulative hazard functions. This approach captures complex, non-linear interactions and higher-order feature effects that Coxnet may miss.
+RSF is a non-parametric ensemble method that constructs multiple survival trees on bootstrapped samples and aggregates predictions to estimate cumulative hazard functions. This method captures non-linear relationships and complex interactions that may not be well-modeled by linear regression. Each tree splits the data to maximize differences in survival times, making RSF highly flexible for heterogeneous patient populations.
 
 #### Findings
 
-The Coxnet model achieved a concordance index of approximately 0.72 on the training set and 0.70 on the test set, while RSF showed slightly higher concordance, demonstrating robustness of our features across parametric and non-parametric methods. Feature importance analysis consistently highlighted high-risk mutations (especially $$TP53$$ and $$RUNX1$$), cytogenetic abnormalities, and derived ratios like $$WBC\_to\_HB$$ and $$BLAST\_to\_WBC$$ as key predictors. Polynomial and interaction terms improved the capture of non-linear relationships between biochemical markers and survival, illustrating the value of integrating clinical, molecular, and derived features in survival prediction models.
+The Coxnet model achieved a concordance index of approximately 0.72 on the training set and 0.70 on the test set, indicating strong predictive performance. RSF produced comparable results with slightly higher concordance, confirming the robustness of the selected features. Feature importance analysis consistently highlighted high-risk mutations (particularly $$TP53$$ and $$RUNX1$$), cytogenetic abnormalities, and derived ratio features (e.g., $$WBC\_to\_HB$$, $$BLAST\_to\_WBC$$) as the strongest predictors. Polynomial and interaction terms improved model flexibility, enabling the capture of non-linear effects between biochemical markers and survival. Overall, the study demonstrates the value of integrating clinical, molecular, and derived features in survival prediction using both parametric and non-parametric machine learning models.
